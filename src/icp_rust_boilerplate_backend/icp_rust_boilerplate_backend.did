@@ -1,0 +1,131 @@
+type AcceptOfferPayload = record { offer_id : nat64 };
+type Achievement = record {
+  id : nat64;
+  title : text;
+  date_earned : nat64;
+  description : text;
+  achievement_type : text;
+  points : nat64;
+};
+type AddSkillPayload = record {
+  name : text;
+  description : text;
+  category : text;
+  experience_level : text;
+};
+type CompleteLessonPayload = record {
+  feedback : text;
+  rating : nat64;
+  match_id : nat64;
+};
+type CreateOfferPayload = record {
+  skill_wanted_description : text;
+  skill_offered_name : text;
+  skill_wanted_level : text;
+  skill_offered_level : text;
+  skill_wanted_category : text;
+  skill_wanted_name : text;
+  skill_offered_description : text;
+  skill_offered_category : text;
+};
+type CreateUserPayload = record { username : text };
+type EndorseSkillPayload = record { user_id : nat64; skill_name : text };
+type GetAllUsersPayload = record { page : opt nat32; limit : opt nat32 };
+type GetFilteredUsersPayload = record {
+  min_rating : opt nat64;
+  max_results : opt nat32;
+  skill_filter : opt text;
+};
+type Match = record {
+  id : nat64;
+  status : text;
+  skills_demonstrated : vec text;
+  quality_score : nat64;
+  accepter_id : text;
+  feedback : text;
+  created_at : nat64;
+  learning_objectives_met : vec text;
+  offerer_id : text;
+  rating : nat64;
+  points_earned : nat64;
+  time_spent : nat64;
+  skill_offer_id : nat64;
+};
+type Message = variant {
+  Error : text;
+  UsernameTaken : text;
+  InvalidPayload : text;
+  NotFound : text;
+  Success : text;
+};
+type Result = variant { Ok : Match; Err : Message };
+type Result_1 = variant { Ok : Skill; Err : Message };
+type Result_2 = variant { Ok : text; Err : Message };
+type Result_3 = variant { Ok : SkillOffer; Err : Message };
+type Result_4 = variant { Ok : User; Err : Message };
+type Result_5 = variant { Ok : vec User; Err : UserError };
+type Result_6 = variant { Ok : User; Err : text };
+type Result_7 = variant { Ok : UserStatistics; Err : UserError };
+type Skill = record {
+  name : text;
+  description : text;
+  endorsements : vec text;
+  verification_status : bool;
+  mastery_points : nat64;
+  category : text;
+  experience_level : text;
+};
+type SkillOffer = record {
+  id : nat64;
+  status : text;
+  teacher : text;
+  created_at : nat64;
+  skill_wanted : Skill;
+  skill_offered : Skill;
+};
+type User = record {
+  id : nat64;
+  username : text;
+  owner : principal;
+  total_points : nat64;
+  date_joined : nat64;
+  endorsements_given : nat64;
+  level : nat64;
+  achievements : vec Achievement;
+  teaching_streak : nat64;
+  completed_exchanges : nat64;
+  endorsements_received : nat64;
+  rating : nat64;
+  learning_streak : nat64;
+  skills : vec Skill;
+  reputation_score : nat64;
+};
+type UserError = variant {
+  NoUsersFound;
+  DatabaseError : text;
+  InvalidData : text;
+  UnauthorizedAccess;
+  InternalError : text;
+};
+type UserStatistics = record {
+  average_exchanges_per_user : nat64;
+  total_skills : nat64;
+  highest_rating : nat64;
+  total_users : nat64;
+  highest_rated_user : opt text;
+  average_skills_per_user : nat64;
+  total_exchanges : nat64;
+};
+service : {
+  accept_offer : (AcceptOfferPayload) -> (Result);
+  add_skill : (AddSkillPayload) -> (Result_1);
+  complete_lesson : (CompleteLessonPayload) -> (Result_2);
+  create_offer : (CreateOfferPayload) -> (Result_3);
+  create_user : (CreateUserPayload) -> (Result_4);
+  endorse_skill : (EndorseSkillPayload) -> (Result_2);
+  get_all_users : (GetAllUsersPayload) -> (Result_5) query;
+  get_filtered_users : (GetFilteredUsersPayload) -> (Result_5) query;
+  get_user_by_id : (nat64) -> (Result_4) query;
+  get_user_by_owner : () -> (Result_6) query;
+  get_user_statistics : () -> (Result_7) query;
+}
