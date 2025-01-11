@@ -377,23 +377,39 @@ fn check_achievements(user: &User) -> Vec<Achievement> {
     new_achievements
 }
 
-// Create User
+// Helper function for validation
+fn validate_create_user_payload(payload: &CreateUserPayload) -> Result<(), String> {
+    if payload.username.trim().is_empty() {
+        Err("Username cannot be empty".to_string())
+    } else if payload.username.len() > 50 {
+        Err("Username cannot exceed 50 characters".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_add_skill_payload(payload: &AddSkillPayload) -> Result<(), String> {
+    if payload.name.trim().is_empty() {
+        Err("Skill name cannot be empty".to_string())
+    } else if payload.category.trim().is_empty() {
+        Err("Skill category cannot be empty".to_string())
+    } else if !["Beginner", "Intermediate", "Advanced", "Expert", "Master"]
+        .contains(&payload.experience_level.as_str())
+    {
+        Err("Invalid experience level".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+// User Functions
 #[ic_cdk::update]
 fn create_user(payload: CreateUserPayload) -> Result<User, Message> {
-    if payload.username.is_empty() {
-        return Err(Message::InvalidPayload(
-            "Username cannot be empty".to_string(),
-        ));
+    if let Err(err) = validate_create_user_payload(&payload) {
+        return Err(Message::InvalidPayload(err));
     }
 
-    let caller = ic_cdk::caller(); // Get the Principal of the caller
-
-    let user_id = ID_COUNTER
-        .with(|counter| {
-            let current_value = *counter.borrow().get();
-            counter.borrow_mut().set(current_value + 1)
-        })
-        .expect("Counter increment failed");
+    let caller = ic_cdk::caller();
 
     USERS.with(|users| {
         if users
@@ -401,23 +417,29 @@ fn create_user(payload: CreateUserPayload) -> Result<User, Message> {
             .iter()
             .any(|(_, user)| user.username == payload.username)
         {
-            return Err(Message::UsernameTaken(format!(
-                "Username {} is already taken",
-                payload.username
-            )));
+            return Err(Message::UsernameTaken(
+                "Username already taken".to_string(),
+            ));
         }
 
-        let user = User {
+        let user_id = ID_COUNTER
+            .with(|counter| {
+                let current_value = *counter.borrow().get();
+                counter.borrow_mut().set(current_value + 1)
+            })
+            .expect("Failed to increment user ID");
+
+        let new_user = User {
             id: user_id,
             owner: caller,
             username: payload.username,
-            skills: Vec::new(),
+            skills: vec![],
             rating: 0,
             completed_exchanges: 0,
             date_joined: time(),
             total_points: 0,
             level: 1,
-            achievements: Vec::new(),
+            achievements: vec![],
             teaching_streak: 0,
             learning_streak: 0,
             reputation_score: 0,
@@ -425,11 +447,43 @@ fn create_user(payload: CreateUserPayload) -> Result<User, Message> {
             endorsements_received: 0,
         };
 
-        USERS.with(|users| {
-            users.borrow_mut().insert(user_id, user.clone());
-        });
+        users.borrow_mut().insert(user_id, new_user.clone());
+        Ok(new_user)
+    })
+}
 
-        Ok(user)
+#[ic_cdk::update]
+fn add_skill(payload: AddSkillPayload) -> Result<Skill, Message> {
+    if let Err(err) = validate_add_skill_payload(&payload) {
+        return Err(Message::InvalidPayload(err));
+    }
+
+    let caller = ic_cdk::caller();
+
+    USERS.with(|users| {
+        let mut users_ref = users.borrow_mut();
+        let user_entry = users_ref.iter().find(|(_, user)| user.owner == caller);
+
+        if let Some((user_id, user)) = user_entry {
+            let mut updated_user = user.clone();
+
+            let new_skill = Skill {
+                name: payload.name,
+                category: payload.category,
+                experience_level: payload.experience_level,
+                description: payload.description,
+                endorsements: vec![],
+                verification_status: false,
+                mastery_points: 0,
+            };
+
+            updated_user.skills.push(new_skill.clone());
+            users_ref.insert(*user_id, updated_user);
+
+            Ok(new_skill)
+        } else {
+            Err(Message::NotFound("User not found".to_string()))
+        }
     })
 }
 
@@ -592,45 +646,6 @@ fn get_user_statistics() -> Result<UserStatistics, UserError> {
             highest_rated_user: highest_rated_user.map(|u| u.username),
             highest_rating,
         })
-    })
-}
-
-// Add Skill to User
-#[ic_cdk::update]
-fn add_skill(payload: AddSkillPayload) -> Result<Skill, Message> {
-    let caller = ic_cdk::caller(); // Get the Principal of the caller
-    let caller_as_string = caller.to_text(); // Convert Principal to String
-
-    USERS.with(|users| {
-        let mut users_ref = users.borrow_mut();
-        let user_id = users_ref
-            .iter()
-            .find(|(_, user)| user.owner.to_string() == caller_as_string) // Compare as Strings
-            .map(|(id, _)| id);
-
-        match user_id {
-            Some(user_id) => {
-                let skill = Skill {
-                    name: payload.name,
-                    category: payload.category,
-                    experience_level: payload.experience_level,
-                    description: payload.description,
-                    endorsements: Vec::new(),
-                    verification_status: false,
-                    mastery_points: 0,
-                };
-
-                if let Some(user_data) = users_ref.get(&user_id) {
-                    let mut updated_user = user_data.clone();
-                    updated_user.skills.push(skill.clone());
-                    users_ref.insert(user_id, updated_user);
-                    Ok(skill)
-                } else {
-                    Err(Message::NotFound("User not found".to_string()))
-                }
-            }
-            None => Err(Message::NotFound("User not found".to_string())),
-        }
     })
 }
 
